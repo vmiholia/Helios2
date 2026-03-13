@@ -7,9 +7,16 @@ from sqlalchemy.orm import Session
 from typing import List
 import os
 from datetime import datetime
+import sys
+import json
 
-from . import models, schemas, database
-from .services import llm_parser
+# Add parent to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import models
+import schemas
+import database
+from services import llm_parser
 
 app = FastAPI(title="Helios2 API", description="Telegram-based health tracker with vClaw")
 
@@ -142,26 +149,17 @@ async def parse_and_log(request: schemas.ParseRequest, db: Session = Depends(get
         daily_log.total_fiber += entry.fiber
         daily_log.total_water += entry.water
         daily_log.total_sugar += entry.sugar
-        
-        # Update average surity
-        total_entries = db.query(models.FoodEntry).filter(
-            models.FoodEntry.user_id == user_id,
-            models.DailyLog.date == date_str
-        ).count()
-        
-        if total_entries > 0:
-            avg_surity = sum([e.surity_percentage for e in db.query(models.FoodEntry).filter(
-                models.FoodEntry.user_id == user_id
-            ).all()]) / total_entries
-            daily_log.average_surity = avg_surity
     
     db.commit()
+    
+    # Calculate average surity
+    avg_surity = sum(e.surity_percentage for e in logged_entries) / len(logged_entries) if logged_entries else 0
     
     return {
         "status": "success",
         "items_logged": len(logged_entries),
         "total_calories": sum(e.calories for e in logged_entries),
-        "average_surity": sum(e.surity_percentage for e in logged_entries) / len(logged_entries) if logged_entries else 0
+        "average_surity": avg_surity
     }
 
 

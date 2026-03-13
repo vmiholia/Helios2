@@ -3,7 +3,13 @@ Helios2 Database Setup
 """
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from . import models
+import os
+import sys
+
+# Add parent to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import models
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./helios2.db"
 
