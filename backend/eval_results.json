@@ -1,0 +1,103 @@
+{
+  "timestamp": "2026-03-13T18:45:36.500686",
+  "summary": {
+    "total": 5,
+    "passed": 4,
+    "failed": 1,
+    "avg_score": 58.0
+  },
+  "results": [
+    {
+      "test_name": "simple_rice",
+      "input_text": "1 bowl cooked rice",
+      "expected_items": [
+        "Cooked Jasmine Rice"
+      ],
+      "actual_items": [
+        "Cooked Jasmine Rice"
+      ],
+      "items_match": true,
+      "calorie_error_pct": 50.0,
+      "protein_error_pct": 0.0,
+      "carbs_error_pct": 0.0,
+      "fats_error_pct": 0.0,
+      "score": 70,
+      "timestamp": "2026-03-13T18:45:36.084441",
+      "error": null
+    },
+    {
+      "test_name": "egg_omelette",
+      "input_text": "2 eggs omelette",
+      "expected_items": [
+        "Egg"
+      ],
+      "actual_items": [],
+      "items_match": false,
+      "calorie_error_pct": 0.0,
+      "protein_error_pct": 0.0,
+      "carbs_error_pct": 0.0,
+      "fats_error_pct": 0.0,
+      "score": 0,
+      "timestamp": "2026-03-13T18:45:36.171018",
+      "error": "Internal Server Error"
+    },
+    {
+      "test_name": "curry_with_rice",
+      "input_text": "1 bowl thai green curry with chicken and 1 bowl jasmine rice",
+      "expected_items": [
+        "Thai Green Curry",
+        "Chicken",
+        "Cooked Jasmine Rice"
+      ],
+      "actual_items": [
+        "Cooked Jasmine Rice",
+        "Thai Green Curry",
+        "Chicken"
+      ],
+      "items_match": true,
+      "calorie_error_pct": 48.31460674157304,
+      "protein_error_pct": 0.0,
+      "carbs_error_pct": 0.0,
+      "fats_error_pct": 0.0,
+      "score": 70,
+      "timestamp": "2026-03-13T18:45:36.283993",
+      "error": null
+    },
+    {
+      "test_name": "apple",
+      "input_text": "1 apple",
+      "expected_items": [
+        "Apple"
+      ],
+      "actual_items": [
+        "Apple"
+      ],
+      "items_match": true,
+      "calorie_error_pct": 80.00000000000001,
+      "protein_error_pct": 0.0,
+      "carbs_error_pct": 0.0,
+      "fats_error_pct": 0.0,
+      "score": 70,
+      "timestamp": "2026-03-13T18:45:36.387950",
+      "error": null
+    },
+    {
+      "test_name": "bread",
+      "input_text": "2 slices bread",
+      "expected_items": [
+        "Bread"
+      ],
+      "actual_items": [
+        "Bread"
+      ],
+      "items_match": true,
+      "calorie_error_pct": 20.0,
+      "protein_error_pct": 0.0,
+      "carbs_error_pct": 0.0,
+      "fats_error_pct": 0.0,
+      "score": 80.0,
+      "timestamp": "2026-03-13T18:45:36.499542",
+      "error": null
+    }
+  ]
+}
