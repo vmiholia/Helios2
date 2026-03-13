@@ -1,11 +1,13 @@
 """
 Helios2 LLM Service
-Uses MiniMax for natural language parsing - with database caching
+Uses MiniMax for natural language parsing - with SQLite database caching
 """
 import os
 import json
 import httpx
+import sqlite3
 from datetime import datetime
+from pathlib import Path
 
 
 class LLMParser:
@@ -17,121 +19,235 @@ class LLMParser:
         self.base_url = "https://api.minimax.chat/v1"
         self.model = "MiniMax-M2.5"
         
-        # Food database cache (loaded from eval_logs)
-        self.food_cache = self._load_food_database()
-    
-    def _load_food_database(self) -> dict:
-        """Load known foods from eval_logs.jsonl"""
-        cache = {}
-        eval_file = os.path.join(os.path.dirname(__file__), "eval_logs.jsonl")
+        # Database path
+        self.db_path = os.path.join(os.path.dirname(__file__), "helios2.db")
         
-        if os.path.exists(eval_file):
-            try:
-                with open(eval_file, "r") as f:
-                    for line in f:
-                        if line.strip():
-                            record = json.loads(line)
-                            for item in record.get("nutrients", []):
-                                food_name = item.get("name", "").lower()
-                                if food_name:
-                                    # Store the full nutrient data
-                                    cache[food_name] = item
-            except:
-                pass
+        # Ensure database exists
+        self._ensure_database()
         
-        print(f"📦 Food database loaded: {len(cache)} items")
-        return cache
+        print(f"📦 Food cache initialized from: {self.db_path}")
     
-    async def parse_food_text(self, text: str, user_id: str) -> dict:
+    def _ensure_database(self):
+        """Ensure the database has the food_items table"""
+        if not os.path.exists(self.db_path):
+            print("⚠️ Database not found!")
+            return
+        
+        # Check if food_items table exists
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='food_items'
+        """)
+        
+        if not cursor.fetchone():
+            # Create table if not exists
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS food_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE,
+                    surity_percentage REAL DEFAULT 0,
+                    default_serving_grams REAL DEFAULT 100,
+                    serving_unit TEXT DEFAULT 'g',
+                    calories REAL DEFAULT 0,
+                    protein REAL DEFAULT 0,
+                    carbohydrates REAL DEFAULT 0,
+                    fats REAL DEFAULT 0,
+                    fiber REAL DEFAULT 0,
+                    water REAL DEFAULT 0,
+                    sugar REAL DEFAULT 0,
+                    nutrients_json TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+        
+        conn.close()
+    
+    def _get_food_from_db(self, food_name: str) -> dict:
+        """Get food item from SQLite database"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Search by name (partial match)
+        cursor.execute("""
+            SELECT * FROM food_items 
+            WHERE LOWER(name) LIKE LOWER(?)
+        """, (f"%{food_name}%",))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return dict(row)
+        return None
+    
+    def _get_all_foods_from_db(self) -> dict:
+        """Get all foods from database for matching"""
+        foods = {}
+        
+        if not os.path.exists(self.db_path):
+            return foods
+        
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("SELECT * FROM food_items")
+            rows = cursor.fetchall()
+            
+            for row in rows:
+                food = dict(row)
+                name = food.get("name", "").lower()
+                foods[name] = food
+        except:
+            pass
+        
+        conn.close()
+        return foods
+    
+    def _save_food_to_db(self, food_data: dict):
+        """Save new food to database"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            # Check if exists
+            cursor.execute("SELECT id FROM food_items WHERE LOWER(name) = LOWER(?)", 
+                         (food_data.get("name", ""),))
+            
+            if not cursor.fetchone():
+                # Insert new food
+                nutrients_json = json.dumps(food_data.get("nutrients", {}))
+                
+                cursor.execute("""
+                    INSERT INTO food_items (
+                        name, surity_percentage, default_serving_grams, serving_unit,
+                        calories, protein, carbohydrates, fats, fiber, water, sugar,
+                        nutrients_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    food_data.get("name", ""),
+                    food_data.get("surity_percentage", 50),
+                    food_data.get("estimated_grams", 100),
+                    food_data.get("unit", "g"),
+                    food_data.get("calories", 0),
+                    food_data.get("protein", 0),
+                    food_data.get("carbohydrates", 0),
+                    food_data.get("fats", 0),
+                    food_data.get("fiber", 0),
+                    food_data.get("water", 0),
+                    food_data.get("sugar", 0),
+                    nutrients_json
+                ))
+                
+                conn.commit()
+                print(f"✅ Saved to DB: {food_data.get('name')}")
+        
+        except Exception as e:
+            print(f"❌ Error saving to DB: {e}")
+        
+        conn.close()
+    
+    async def parse_food_text(self, text: str, user_id: str) -> list:
         """
-        Parse natural language food input using MiniMax
-        First checks database, then calls AI if not found
+        Parse natural language food input
+        1. Check database for known foods
+        2. Call AI for new foods
+        3. Save new foods to database
         """
         
         # Step 1: Extract food names from text
         food_names = self._extract_food_names(text)
         
-        # Step 2: Check if all foods are in database
-        all_found = True
-        items_to_parse = []
+        # Step 2: Check database for each food
+        db_foods = self._get_all_foods_from_db()
+        
+        items_to_return = []
+        new_foods = []
         
         for food_name in food_names:
-            if food_name.lower() in self.food_cache:
-                # Use cached data
-                items_to_parse.append({
-                    "name": food_name,
-                    "from_cache": True,
-                    "data": self.food_cache[food_name.lower()]
-                })
-            else:
-                all_found = False
+            found = False
+            
+            # Search in database
+            for db_name, db_food in db_foods.items():
+                if food_name.lower() in db_name or db_name in food_name.lower():
+                    # Use database food
+                    nutrients_json = db_food.get("nutrients_json", "{}")
+                    if isinstance(nutrients_json, str):
+                        nutrients = json.loads(nutrients_json)
+                    else:
+                        nutrients = nutrients_json
+                    
+                    items_to_return.append({
+                        "name": db_food.get("name", food_name),
+                        "quantity": 1,
+                        "unit": db_food.get("serving_unit", "serving"),
+                        "estimated_grams": db_food.get("default_serving_grams", 100),
+                        "surity_percentage": db_food.get("surity_percentage", 95),
+                        "source": "database",
+                        "calories": db_food.get("calories", 0),
+                        "protein": db_food.get("protein", 0),
+                        "carbohydrates": db_food.get("carbohydrates", 0),
+                        "fats": db_food.get("fats", 0),
+                        "fiber": db_food.get("fiber", 0),
+                        "water": db_food.get("water", 0),
+                        "sugar": db_food.get("sugar", 0),
+                        "nutrients": nutrients
+                    })
+                    found = True
+                    break
+            
+            if not found:
+                new_foods.append(food_name)
         
-        # Step 3: If all found, return cached data
-        if all_found and items_to_parse:
-            print(f"✅ All foods found in database: {food_names}")
-            return self._build_response_from_cache(items_to_parse, text)
+        # Step 3: If new foods found, call AI
+        if new_foods:
+            print(f"🔍 New foods not in DB: {new_foods}")
+            print(f"🤖 Calling AI brain...")
+            
+            ai_items = await self._call_ai_brain(text, user_id)
+            
+            # Add AI items and save to database
+            for item in ai_items:
+                items_to_return.append(item)
+                
+                # Save to database for future use
+                self._save_food_to_db(item)
         
-        # Step 4: Some foods not found - call AI brain
-        missing_foods = [f for f in food_names if f.lower() not in self.food_cache]
-        print(f"🔍 Foods not in database: {missing_foods}")
-        print(f"🤖 Calling AI brain...")
-        
-        # Call AI for all foods (to get complete data)
-        return await self._call_ai_brain(text, user_id)
+        return items_to_return
     
     def _extract_food_names(self, text: str) -> list:
         """Extract food names from input text"""
         text_lower = text.lower()
         
-        # Known foods to look for
-        known_foods = list(self.food_cache.keys())
+        # Common patterns
+        patterns = {
+            "omelette": "omelette",
+            "eggs": "omelette",
+            "egg": "omelette",
+            "bread": "sourdough bread",
+            "toast": "sourdough bread",
+            "rice": "jasmine rice",
+            "jasmine rice": "jasmine rice",
+            "green curry": "thai green curry",
+            "curry": "thai green curry",
+            "chicken": "chicken",
+            "apple": "apple",
+            "dal": "dal",
+            "roti": "roti",
+        }
         
         found = []
-        for food in known_foods:
-            if food in text_lower:
-                found.append(food)
-        
-        # If no matches, try common patterns
-        if not found:
-            # Extract using simple keyword matching
-            patterns = {
-                "omelette": "omelette (3 eggs)",
-                "eggs": "omelette (3 eggs)",
-                "egg": "omelette (3 eggs)",
-                "bread": "sourdough bread (1.2 slice)",
-                "rice": "jasmine rice",
-                "jasmine rice": "jasmine rice",
-                "thai green curry": "thai green curry with chicken",
-                "curry": "thai green curry with chicken",
-                "chicken": "thai green curry with chicken",
-            }
-            
-            for pattern, food_name in patterns.items():
-                if pattern in text_lower and food_name not in found:
-                    found.append(food_name)
+        for pattern, food_name in patterns.items():
+            if pattern in text_lower and food_name not in found:
+                found.append(food_name)
         
         return found if found else ["unknown food"]
-    
-    def _build_response_from_cache(self, items: list, text: str) -> list:
-        """Build response from cached database"""
-        result = []
-        
-        for item in items:
-            data = item["data"]
-            nutrients = data.get("nutrients", {})
-            
-            # Build response item
-            result.append({
-                "name": data.get("name", item["name"]),
-                "quantity": data.get("quantity", 1),
-                "unit": data.get("unit", "serving"),
-                "estimated_grams": data.get("grams", 100),
-                "surity_percentage": 95,  # High surity - from database
-                "source": "database_cache",
-                "nutrients": nutrients
-            })
-        
-        return result
     
     async def _call_ai_brain(self, text: str, user_id: str) -> list:
         """Call AI brain for parsing"""
@@ -166,7 +282,6 @@ class LLMParser:
                     content = result["choices"][0]["message"]["content"]
                     parsed = self._parse_llm_response(content)
                     
-                    # Mark as AI parsed
                     for item in parsed:
                         item["source"] = "ai_parsed"
                     
@@ -175,25 +290,24 @@ class LLMParser:
                     return self._fallback_parse(text)
                     
         except Exception as e:
+            print(f"❌ AI call failed: {e}")
             return self._fallback_parse(text)
     
     def _system_prompt(self) -> str:
-        return """You are a nutritional expert for Helios2 health tracking app.
-        
-Parse the user's food input and return ALL nutrients with individual surity percentages.
+        return """You are a nutritional expert for Helios2.
 
-For EACH food item, include ALL 34 nutrients with surity:
+Parse food input and return ALL nutrients with surity.
 
-MACROS (7): calories, protein, carbohydrates, fats, fiber, water, sugar
-VITAMINS (13): vitamin_a_mcg, vitamin_d_mcg, vitamin_e_mg, vitamin_k_mcg, vitamin_b1_mg, vitamin_b2_mg, vitamin_b3_mg, vitamin_b5_mg, vitamin_b6_mg, vitamin_b7_mcg, vitamin_b9_mcg, vitamin_b12_mcg, vitamin_c_mg
-MINERALS (14): calcium_mg, iron_mg, magnesium_mg, phosphorus_mg, potassium_mg, sodium_mg, zinc_mg, selenium_mcg, copper_mg, manganese_mg, iodine_mcg, chromium_mcg, fluoride_mg, molybdenum_mcg
+MACROS: calories, protein, carbohydrates, fats, fiber, water, sugar
+VITAMINS: vitamin_a_mcg, vitamin_d_mcg, vitamin_e_mg, vitamin_k_mcg, vitamin_b1_mg, vitamin_b2_mg, vitamin_b3_mg, vitamin_b5_mg, vitamin_b6_mg, vitamin_b7_mcg, vitamin_b9_mcg, vitamin_b12_mcg, vitamin_c_mg
+MINERALS: calcium_mg, iron_mg, magnesium_mg, phosphorus_mg, potassium_mg, sodium_mg, zinc_mg, selenium_mcg, copper_mg, manganese_mg
 
 Return JSON array with {value, surity} for each nutrient."""
 
     def _build_prompt(self, text: str) -> str:
         return f"""Parse: "{text}"
 
-Return JSON array with ALL nutrients (value + surity) for each food item."""
+Return JSON array with ALL nutrients (value + surity) for each food."""
 
     def _parse_llm_response(self, content: str) -> list:
         try:
@@ -226,12 +340,7 @@ Return JSON array with ALL nutrients (value + surity) for each food item."""
             "omelette": {"name": "Omelette", "calories": 154, "protein": 11, "carbs": 0.8, "fats": 12, "fiber": 0, "sugar": 0, "serving": 100},
         }
         
-        quantity_map = {
-            "1 bowl": 1, "2 bowl": 2, "3 bowl": 3,
-            "1 plate": 1, "2 plate": 2,
-            "1 piece": 1, "2 piece": 2,
-            "1": 1, "2": 2, "3": 3
-        }
+        quantity_map = {"1 bowl": 1, "2 bowl": 2, "3 bowl": 3, "1": 1, "2": 2, "3": 3}
         
         detected_quantity = 1
         for qty_word, qty_val in quantity_map.items():
@@ -271,8 +380,6 @@ Return JSON array with ALL nutrients (value + surity) for each food item."""
                 "protein": 20,
                 "carbohydrates": 40,
                 "fats": 15,
-                "fiber": 2,
-                "sugar": 3,
                 "source": "fallback"
             })
         
