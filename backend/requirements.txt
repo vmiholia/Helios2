@@ -1,0 +1,7 @@
+# Helios2 Backend Requirements
+fastapi
+uvicorn
+sqlalchemy
+python-dotenv
+httpx
+pydantic

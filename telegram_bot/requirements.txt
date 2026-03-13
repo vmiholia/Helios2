@@ -1,0 +1,4 @@
+# Helios2 Telegram Bot Requirements
+python-telegram-bot
+httpx
+python-dotenv
