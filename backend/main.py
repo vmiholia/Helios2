@@ -17,6 +17,7 @@ import models
 import schemas
 import database
 from services import llm_parser
+from evals_simple import log_pipeline_run
 
 app = FastAPI(title="Helios2 API", description="Telegram-based health tracker with vClaw")
 
@@ -154,6 +155,9 @@ async def parse_and_log(request: schemas.ParseRequest, db: Session = Depends(get
     
     # Calculate average surity
     avg_surity = sum(e.surity_percentage for e in logged_entries) / len(logged_entries) if logged_entries else 0
+    
+    # Log to evals for review
+    await log_pipeline_run(text, items, source="fallback")
     
     return {
         "status": "success",
