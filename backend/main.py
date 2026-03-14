@@ -167,6 +167,170 @@ async def parse_and_log(request: schemas.ParseRequest, db: Session = Depends(get
     }
 
 
+# --- Log Pre-parsed Food (from AI conversation) ---
+@app.post("/log_parsed/")
+async def log_parsed_food(request: schemas.LogParsedRequest, db: Session = Depends(get_db)):
+    """
+    Log food items that were already parsed by AI in conversation.
+    No parsing needed - just log directly.
+    Tracks all 34 nutrients (8 macros + 13 vitamins + 13 minerals)
+    """
+    user_id = request.user_id
+    items = request.items
+    raw_text = request.raw_text
+    
+    logged_entries = []
+    
+    for item in items:
+        # Create or find food item
+        food_name = item.name
+        
+        # Check if food exists
+        food = db.query(models.FoodItem).filter(
+            models.FoodItem.name.ilike(f"%{food_name}%")
+        ).first()
+        
+        if not food:
+            # Create new food item
+            food = models.FoodItem(
+                name=food_name,
+                surity_percentage=item.surity_percentage,
+                default_serving_grams=item.estimated_grams,
+                calories=item.calories,
+                protein=item.protein,
+                carbohydrates=item.carbohydrates,
+                fats=item.fats,
+                fiber=item.fiber,
+                sugar=item.sugar,
+                water=item.water,
+            )
+            db.add(food)
+            db.commit()
+            db.refresh(food)
+        
+        # Create log entry with all 34 nutrients
+        entry = models.FoodEntry(
+            user_id=user_id,
+            food_item_id=food.id,
+            quantity=item.quantity,
+            serving_grams=item.estimated_grams,
+            raw_text=raw_text,
+            surity_percentage=item.surity_percentage,
+            ingested_at=datetime.now(),
+            # Macros (8)
+            calories=item.calories,
+            protein=item.protein,
+            carbohydrates=item.carbohydrates,
+            fats=item.fats,
+            fiber=item.fiber,
+            water=item.water,
+            sugar=item.sugar,
+            # Vitamins (13)
+            vitamin_a_mcg=item.vitamin_a_mcg,
+            vitamin_d_mcg=item.vitamin_d_mcg,
+            vitamin_e_mg=item.vitamin_e_mg,
+            vitamin_k_mcg=item.vitamin_k_mcg,
+            vitamin_b1_mg=item.vitamin_b1_mg,
+            vitamin_b2_mg=item.vitamin_b2_mg,
+            vitamin_b3_mg=item.vitamin_b3_mg,
+            vitamin_b5_mg=item.vitamin_b5_mg,
+            vitamin_b6_mg=item.vitamin_b6_mg,
+            vitamin_b7_mcg=item.vitamin_b7_mcg,
+            vitamin_b9_mcg=item.vitamin_b9_mcg,
+            vitamin_b12_mcg=item.vitamin_b12_mcg,
+            vitamin_c_mg=item.vitamin_c_mg,
+            # Minerals (13)
+            calcium_mg=item.calcium_mg,
+            iron_mg=item.iron_mg,
+            magnesium_mg=item.magnesium_mg,
+            phosphorus_mg=item.phosphorus_mg,
+            potassium_mg=item.potassium_mg,
+            sodium_mg=item.sodium_mg,
+            zinc_mg=item.zinc_mg,
+            selenium_mcg=item.selenium_mcg,
+            copper_mg=item.copper_mg,
+            manganese_mg=item.manganese_mg,
+        )
+        
+        db.add(entry)
+        logged_entries.append(entry)
+    
+    # Update daily log ONCE after all entries are created
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    daily_log = db.query(models.DailyLog).filter(
+        models.DailyLog.user_id == user_id,
+        models.DailyLog.date == date_str
+    ).first()
+    
+    if not daily_log:
+        # Initialize all 34 nutrients to 0
+        daily_log = models.DailyLog(
+            user_id=user_id,
+            date=date_str,
+            total_calories=0, total_protein=0, total_carbohydrates=0, total_fats=0,
+            total_fiber=0, total_water=0, total_sugar=0,
+            total_vitamin_a_mcg=0, total_vitamin_d_mcg=0, total_vitamin_e_mg=0,
+            total_vitamin_k_mcg=0, total_vitamin_b1_mg=0, total_vitamin_b2_mg=0,
+            total_vitamin_b3_mg=0, total_vitamin_b5_mg=0, total_vitamin_b6_mg=0,
+            total_vitamin_b7_mcg=0, total_vitamin_b9_mcg=0, total_vitamin_b12_mcg=0,
+            total_vitamin_c_mg=0, total_calcium_mg=0, total_iron_mg=0,
+            total_magnesium_mg=0, total_phosphorus_mg=0, total_potassium_mg=0,
+            total_sodium_mg=0, total_zinc_mg=0, total_selenium_mcg=0,
+            total_copper_mg=0, total_manganese_mg=0
+        )
+        db.add(daily_log)
+    
+    # Add up all 34 nutrients
+    for entry in logged_entries:
+        # Macros (8)
+        daily_log.total_calories += entry.calories
+        daily_log.total_protein += entry.protein
+        daily_log.total_carbohydrates += entry.carbohydrates
+        daily_log.total_fats += entry.fats
+        daily_log.total_fiber += entry.fiber
+        daily_log.total_water += entry.water
+        daily_log.total_sugar += entry.sugar
+        
+        # Vitamins (13)
+        daily_log.total_vitamin_a_mcg += entry.vitamin_a_mcg
+        daily_log.total_vitamin_d_mcg += entry.vitamin_d_mcg
+        daily_log.total_vitamin_e_mg += entry.vitamin_e_mg
+        daily_log.total_vitamin_k_mcg += entry.vitamin_k_mcg
+        daily_log.total_vitamin_b1_mg += entry.vitamin_b1_mg
+        daily_log.total_vitamin_b2_mg += entry.vitamin_b2_mg
+        daily_log.total_vitamin_b3_mg += entry.vitamin_b3_mg
+        daily_log.total_vitamin_b5_mg += entry.vitamin_b5_mg
+        daily_log.total_vitamin_b6_mg += entry.vitamin_b6_mg
+        daily_log.total_vitamin_b7_mcg += entry.vitamin_b7_mcg
+        daily_log.total_vitamin_b9_mcg += entry.vitamin_b9_mcg
+        daily_log.total_vitamin_b12_mcg += entry.vitamin_b12_mcg
+        daily_log.total_vitamin_c_mg += entry.vitamin_c_mg
+        
+        # Minerals (13)
+        daily_log.total_calcium_mg += entry.calcium_mg
+        daily_log.total_iron_mg += entry.iron_mg
+        daily_log.total_magnesium_mg += entry.magnesium_mg
+        daily_log.total_phosphorus_mg += entry.phosphorus_mg
+        daily_log.total_potassium_mg += entry.potassium_mg
+        daily_log.total_sodium_mg += entry.sodium_mg
+        daily_log.total_zinc_mg += entry.zinc_mg
+        daily_log.total_selenium_mcg += entry.selenium_mcg
+        daily_log.total_copper_mg += entry.copper_mg
+        daily_log.total_manganese_mg += entry.manganese_mg
+    
+    db.commit()
+    
+    avg_surity = sum(e.surity_percentage for e in logged_entries) / len(logged_entries) if logged_entries else 0
+    
+    return {
+        "status": "success",
+        "items_logged": len(logged_entries),
+        "total_calories": sum(e.calories for e in logged_entries),
+        "average_surity": avg_surity,
+        "foods": [{"name": i.name, "calories": i.calories} for i in items]
+    }
+
+
 # --- Food Items API ---
 @app.post("/food/", response_model=schemas.FoodItemResponse)
 def create_food_item(food: schemas.FoodItemCreate, db: Session = Depends(get_db)):
@@ -203,7 +367,7 @@ def get_daily_log(user_id: str, date: str, db: Session = Depends(get_db)):
     ).first()
     
     if not log:
-        # Return empty summary
+        # Return empty summary with all 34 nutrients
         return {
             "id": 0,
             "user_id": user_id,
@@ -215,8 +379,14 @@ def get_daily_log(user_id: str, date: str, db: Session = Depends(get_db)):
             "total_fiber": 0,
             "total_water": 0,
             "total_sugar": 0,
-            "vitamins": {},
-            "minerals": {},
+            "total_vitamin_a_mcg": 0, "total_vitamin_d_mcg": 0, "total_vitamin_e_mg": 0,
+            "total_vitamin_k_mcg": 0, "total_vitamin_b1_mg": 0, "total_vitamin_b2_mg": 0,
+            "total_vitamin_b3_mg": 0, "total_vitamin_b5_mg": 0, "total_vitamin_b6_mg": 0,
+            "total_vitamin_b7_mcg": 0, "total_vitamin_b9_mcg": 0, "total_vitamin_b12_mcg": 0,
+            "total_vitamin_c_mg": 0, "total_calcium_mg": 0, "total_iron_mg": 0,
+            "total_magnesium_mg": 0, "total_phosphorus_mg": 0, "total_potassium_mg": 0,
+            "total_sodium_mg": 0, "total_zinc_mg": 0, "total_selenium_mcg": 0,
+            "total_copper_mg": 0, "total_manganese_mg": 0,
             "average_surity": 0
         }
     

@@ -90,9 +90,35 @@ class DailyLogResponse(BaseModel):
     total_fiber: float
     total_water: float
     total_sugar: float
-    vitamins: Dict
-    minerals: Dict
-    average_surity: float
+    
+    # Vitamins (13)
+    total_vitamin_a_mcg: float = 0.0
+    total_vitamin_d_mcg: float = 0.0
+    total_vitamin_e_mg: float = 0.0
+    total_vitamin_k_mcg: float = 0.0
+    total_vitamin_b1_mg: float = 0.0
+    total_vitamin_b2_mg: float = 0.0
+    total_vitamin_b3_mg: float = 0.0
+    total_vitamin_b5_mg: float = 0.0
+    total_vitamin_b6_mg: float = 0.0
+    total_vitamin_b7_mcg: float = 0.0
+    total_vitamin_b9_mcg: float = 0.0
+    total_vitamin_b12_mcg: float = 0.0
+    total_vitamin_c_mg: float = 0.0
+    
+    # Minerals (13)
+    total_calcium_mg: float = 0.0
+    total_iron_mg: float = 0.0
+    total_magnesium_mg: float = 0.0
+    total_phosphorus_mg: float = 0.0
+    total_potassium_mg: float = 0.0
+    total_sodium_mg: float = 0.0
+    total_zinc_mg: float = 0.0
+    total_selenium_mcg: float = 0.0
+    total_copper_mg: float = 0.0
+    total_manganese_mg: float = 0.0
+    
+    average_surity: float = 0.0
 
     class Config:
         from_attributes = True
@@ -109,3 +135,57 @@ class ParseResponse(BaseModel):
     """Response with parsed food items"""
     items: List[Dict[str, Any]]
     raw_text: str
+
+
+# --- Pre-parsed Food Entry ---
+class ParsedFoodItem(BaseModel):
+    """Single pre-parsed food item with all 34 nutrients"""
+    # Basic info
+    name: str
+    quantity: float = 1.0
+    unit: str = "serving"
+    estimated_grams: float = 100.0
+    surity_percentage: float = 50.0
+    
+    # Macros (8)
+    calories: float = 0.0
+    protein: float = 0.0
+    carbohydrates: float = 0.0
+    fats: float = 0.0
+    fiber: float = 0.0
+    water: float = 0.0
+    sugar: float = 0.0
+    
+    # Vitamins (13)
+    vitamin_a_mcg: float = 0.0
+    vitamin_d_mcg: float = 0.0
+    vitamin_e_mg: float = 0.0
+    vitamin_k_mcg: float = 0.0
+    vitamin_b1_mg: float = 0.0
+    vitamin_b2_mg: float = 0.0
+    vitamin_b3_mg: float = 0.0
+    vitamin_b5_mg: float = 0.0
+    vitamin_b6_mg: float = 0.0
+    vitamin_b7_mcg: float = 0.0
+    vitamin_b9_mcg: float = 0.0
+    vitamin_b12_mcg: float = 0.0
+    vitamin_c_mg: float = 0.0
+    
+    # Minerals (13)
+    calcium_mg: float = 0.0
+    iron_mg: float = 0.0
+    magnesium_mg: float = 0.0
+    phosphorus_mg: float = 0.0
+    potassium_mg: float = 0.0
+    sodium_mg: float = 0.0
+    zinc_mg: float = 0.0
+    selenium_mcg: float = 0.0
+    copper_mg: float = 0.0
+    manganese_mg: float = 0.0
+
+
+class LogParsedRequest(BaseModel):
+    """Request with pre-parsed food items (from AI conversation)"""
+    user_id: str
+    items: List[ParsedFoodItem]
+    raw_text: str = ""

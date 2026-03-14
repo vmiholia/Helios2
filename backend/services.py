@@ -155,71 +155,20 @@ class LLMParser:
     
     async def parse_food_text(self, text: str, user_id: str) -> list:
         """
-        Parse natural language food input
-        1. Check database for known foods
-        2. Call AI for new foods
-        3. Save new foods to database
+        Parse natural language food input using AI
+        Always uses AI to parse the input
         """
         
-        # Step 1: Extract food names from text
-        food_names = self._extract_food_names(text)
+        print(f"🤖 Calling AI to parse: {text}")
         
-        # Step 2: Check database for each food
-        db_foods = self._get_all_foods_from_db()
+        # Call AI to parse
+        ai_items = await self._call_ai_brain(text, user_id)
         
-        items_to_return = []
-        new_foods = []
+        # Save new foods to database for future use
+        for item in ai_items:
+            self._save_food_to_db(item)
         
-        for food_name in food_names:
-            found = False
-            
-            # Search in database
-            for db_name, db_food in db_foods.items():
-                if food_name.lower() in db_name or db_name in food_name.lower():
-                    # Use database food
-                    nutrients_json = db_food.get("nutrients_json", "{}")
-                    if isinstance(nutrients_json, str):
-                        nutrients = json.loads(nutrients_json)
-                    else:
-                        nutrients = nutrients_json
-                    
-                    items_to_return.append({
-                        "name": db_food.get("name", food_name),
-                        "quantity": 1,
-                        "unit": db_food.get("serving_unit", "serving"),
-                        "estimated_grams": db_food.get("default_serving_grams", 100),
-                        "surity_percentage": db_food.get("surity_percentage", 95),
-                        "source": "database",
-                        "calories": db_food.get("calories", 0),
-                        "protein": db_food.get("protein", 0),
-                        "carbohydrates": db_food.get("carbohydrates", 0),
-                        "fats": db_food.get("fats", 0),
-                        "fiber": db_food.get("fiber", 0),
-                        "water": db_food.get("water", 0),
-                        "sugar": db_food.get("sugar", 0),
-                        "nutrients": nutrients
-                    })
-                    found = True
-                    break
-            
-            if not found:
-                new_foods.append(food_name)
-        
-        # Step 3: If new foods found, call AI
-        if new_foods:
-            print(f"🔍 New foods not in DB: {new_foods}")
-            print(f"🤖 Calling AI brain...")
-            
-            ai_items = await self._call_ai_brain(text, user_id)
-            
-            # Add AI items and save to database
-            for item in ai_items:
-                items_to_return.append(item)
-                
-                # Save to database for future use
-                self._save_food_to_db(item)
-        
-        return items_to_return
+        return ai_items
     
     def _extract_food_names(self, text: str) -> list:
         """Extract food names from input text"""
