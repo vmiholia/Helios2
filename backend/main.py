@@ -51,7 +51,7 @@ async def log_parsed_food(request: schemas.LogParsedRequest, db: Session = Depen
     Log food items that were already parsed by AI in conversation.
     Tracks all 34 nutrients (8 macros + 13 vitamins + 13 minerals)
     """
-    result = services.log_food_items(db, request.user_id, request.items, request.raw_text)
+    result = services.log_food_items(db, request.user_id, request.items, request.raw_text, request.date)
     return {"status": "success", **result}
 
 

@@ -189,3 +189,4 @@ class LogParsedRequest(BaseModel):
     user_id: str
     items: List[ParsedFoodItem]
     raw_text: str = ""
+    date: str = None  # Optional: YYYY-MM-DD format, defaults to today IST

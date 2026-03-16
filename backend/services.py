@@ -2,18 +2,21 @@
 Helios2 Services - Business Logic Layer
 """
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import models
 
+# Indian Standard Time (UTC+5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
 
-def get_utc_now():
-    """Get current UTC datetime"""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+def get_ist_now():
+    """Get current IST datetime"""
+    return datetime.now(IST).replace(tzinfo=None)
 
 
 def get_date_str():
-    """Get today's date as string in UTC"""
-    return get_utc_now().strftime("%Y-%m-%d")
+    """Get today's date as string in IST"""
+    return get_ist_now().strftime("%Y-%m-%d")
 
 
 def find_or_create_food(db: Session, name: str, nutrients: dict) -> models.FoodItem:
@@ -86,7 +89,7 @@ def create_food_entry(db: Session, user_id: str, food: models.FoodItem,
         serving_grams=nutrients.get("estimated_grams", 100),
         raw_text=raw_text,
         surity_percentage=nutrients.get("surity_percentage", 50),
-        ingested_at=get_utc_now(),
+        ingested_at=get_ist_now(),
         # Macros (8)
         calories=nutrients.get("calories", 0),
         protein=nutrients.get("protein", 0),
@@ -194,12 +197,14 @@ def aggregate_entry_to_daily(entry: models.FoodEntry, daily_log: models.DailyLog
     daily_log.total_manganese_mg += entry.manganese_mg
 
 
-def log_food_items(db: Session, user_id: str, items: list, raw_text: str) -> dict:
+def log_food_items(db: Session, user_id: str, items: list, raw_text: str, date_str: str = None) -> dict:
     """
     Main business logic: Log food items and aggregate to daily log.
     Returns summary of logged items.
     """
-    date_str = get_date_str()
+    # Use provided date or default to today in IST
+    if not date_str:
+        date_str = get_date_str()
     logged_entries = []
     
     # Get or create daily log first
