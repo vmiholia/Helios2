@@ -180,3 +180,185 @@ class DailyLog(Base):
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ============================================================
+# WHOOP Integration Models
+# ============================================================
+
+class WhoopUser(Base):
+    """WHOOP user OAuth tokens and profile"""
+    __tablename__ = "whoop_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True)  # Helios2 user (Telegram ID)
+    
+    # WHOOP OAuth tokens
+    whoop_user_id = Column(String, unique=True, index=True)  # WHOOP's user ID
+    access_token = Column(String)
+    refresh_token = Column(String)
+    token_expires_at = Column(DateTime)
+    
+    # Profile info
+    email = Column(String)
+    first_name = Column(String)
+    last_name = Column(String)
+    
+    # Body measurements
+    height_meter = Column(Float)
+    weight_kilogram = Column(Float)
+    max_heart_rate = Column(Integer)
+    
+    # Status
+    is_active = Column(Integer, default=1)
+    last_sync_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WhoopRecovery(Base):
+    """WHOOP Recovery scores"""
+    __tablename__ = "whoop_recovery"
+
+    id = Column(Integer, primary_key=True, index=True)
+    whoop_user_id = Column(String, index=True)
+    
+    # IDs
+    cycle_id = Column(Integer, index=True)
+    sleep_id = Column(String)
+    
+    # Timing
+    date = Column(String, index=True)  # YYYY-MM-DD
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
+    
+    # Score state
+    score_state = Column(String)  # "SCORED", "PENDING", etc.
+    
+    # Recovery metrics
+    recovery_score = Column(Integer)  # 0-100
+    resting_heart_rate = Column(Float)  # bpm
+    hrv_rmssd_milli = Column(Float)  # ms - heart rate variability
+    spo2_percentage = Column(Float)  # blood oxygen
+    skin_temp_celsius = Column(Float)
+    
+    created_at_record = Column(DateTime, default=datetime.utcnow)
+
+
+class WhoopCycle(Base):
+    """WHOOP Daily Cycle (Strain)"""
+    __tablename__ = "whoop_cycles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    whoop_user_id = Column(String, index=True)
+    
+    # IDs
+    cycle_id = Column(Integer, unique=True, index=True)
+    
+    # Timing
+    date = Column(String, index=True)  # YYYY-MM-DD
+    start = Column(DateTime)
+    end = Column(DateTime)
+    timezone_offset = Column(String)
+    
+    # Score state
+    score_state = Column(String)
+    
+    # Daily strain metrics
+    strain_score = Column(Float)  # 0-21
+    kilojoule = Column(Float)
+    average_heart_rate = Column(Float)
+    max_heart_rate = Column(Float)
+    
+    created_at_record = Column(DateTime, default=datetime.utcnow)
+
+
+class WhoopSleep(Base):
+    """WHOOP Sleep data"""
+    __tablename__ = "whoop_sleep"
+
+    id = Column(Integer, primary_key=True, index=True)
+    whoop_user_id = Column(String, index=True)
+    
+    # IDs
+    sleep_id = Column(String, unique=True, index=True)
+    cycle_id = Column(Integer)
+    
+    # Timing
+    date = Column(String, index=True)  # YYYY-MM-DD
+    start = Column(DateTime)
+    end = Column(DateTime)
+    timezone_offset = Column(String)
+    nap = Column(Integer)  # 0 or 1
+    
+    # Score state
+    score_state = Column(String)
+    
+    # Sleep stages (in milliseconds)
+    total_in_bed_time_milli = Column(Integer)
+    total_awake_time_milli = Column(Integer)
+    total_no_data_time_milli = Column(Integer)
+    total_light_sleep_time_milli = Column(Integer)
+    total_slow_wave_sleep_time_milli = Column(Integer)  # Deep sleep
+    total_rem_sleep_time_milli = Column(Integer)
+    sleep_cycle_count = Column(Integer)
+    disturbance_count = Column(Integer)
+    
+    # Sleep need
+    baseline_milli = Column(Integer)
+    need_from_sleep_debt_milli = Column(Integer)
+    need_from_recent_strain_milli = Column(Integer)
+    need_from_recent_nap_milli = Column(Integer)
+    
+    # Other metrics
+    respiratory_rate = Column(Float)
+    sleep_performance_percentage = Column(Float)
+    sleep_consistency_percentage = Column(Float)
+    sleep_efficiency_percentage = Column(Float)
+    
+    created_at_record = Column(DateTime, default=datetime.utcnow)
+
+
+class WhoopWorkout(Base):
+    """WHOOP Workout data"""
+    __tablename__ = "whoop_workouts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    whoop_user_id = Column(String, index=True)
+    
+    # IDs
+    workout_id = Column(String, unique=True, index=True)
+    v1_id = Column(Integer)
+    sport_id = Column(Integer)
+    
+    # Timing
+    date = Column(String, index=True)  # YYYY-MM-DD
+    start = Column(DateTime)
+    end = Column(DateTime)
+    timezone_offset = Column(String)
+    
+    # Sport
+    sport_name = Column(String)
+    
+    # Score state
+    score_state = Column(String)
+    
+    # Workout metrics
+    strain_score = Column(Float)
+    average_heart_rate = Column(Float)
+    max_heart_rate = Column(Float)
+    kilojoule = Column(Float)
+    percent_recorded = Column(Float)
+    distance_meter = Column(Float)
+    altitude_gain_meter = Column(Float)
+    altitude_change_meter = Column(Float)
+    
+    # Heart rate zones (milliseconds in each zone)
+    zone_zero_milli = Column(Integer)
+    zone_one_milli = Column(Integer)
+    zone_two_milli = Column(Integer)
+    zone_three_milli = Column(Integer)
+    zone_four_milli = Column(Integer)
+    zone_five_milli = Column(Integer)
+    
+    created_at_record = Column(DateTime, default=datetime.utcnow)
